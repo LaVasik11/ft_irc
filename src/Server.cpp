@@ -219,6 +219,31 @@ void Server::removeDisconnectedClients()
     }
 }
 
+void Server::sendClientData(Client& client)
+{
+    const std::string& buffer = client.getSendBuffer();
+
+    if (buffer.empty())
+        return;
+
+    ssize_t sent = send(client.getFd(), buffer.c_str(), buffer.size(), 0);
+
+    if (sent > 0)
+        client.removeSentData(sent);
+    else if (sent == -1 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
+        client.disconnect();
+}
+
+bool Server::isNickInUse(std::string nick)
+{
+	for (size_t i = 0; i < _clients.size(); i++)
+	{
+		if (_clients[i].getNick() == nick)
+			return (true);
+	}
+	return (false);
+}
+
 void Server::run()
 {
 	std::vector<struct pollfd>	pollFds;
@@ -261,7 +286,10 @@ void Server::run()
         for (size_t i = 1; i < pollFds.size(); i++)
         {
             if (pollFds[i].revents)
+			{
     			handleClientEvent(_clients[i - 1], pollFds[i].revents);
+				sendClientData(_clients[i - 1]);
+			}
         }
 
         removeDisconnectedClients();

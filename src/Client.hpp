@@ -9,6 +9,8 @@ private:
     int			_fd;
     std::string	_buffer;
     bool		_disconnected;
+	std::string	_nick;
+	std::string	_sendBuffer;
 
 public:
     Client(int fd);
@@ -20,6 +22,11 @@ public:
     void				addData(const char *data, int bytes);
     void				disconnect();
 	bool				getNextMessage(std::string& message);
+	void				setNick(std::string nick);
+	std::string			getNick();
+	void				queueMessage(const std::string& message);
+	const std::string&	getSendBuffer() const;
+    void				removeSentData(size_t bytes);
 };
 
 #endif

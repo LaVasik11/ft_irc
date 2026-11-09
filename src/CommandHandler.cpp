@@ -1,34 +1,142 @@
 #include "CommandHandler.hpp"
 #include "Server.hpp"
-
 #include <iostream>
+#include <sstream>
+#include <iomanip>
+#include "IRCReplies.hpp"
+
 
 void CommandHandler::handle(Server& server, Client& client, const Message& message)
 {
-	(void)server;
-
-    if (message.command == "PING")
-    {
-        std::cout << "PING from " << client.getFd() << std::endl;
-    }
-    else if (message.command == "NICK")
-    {
-        std::cout << "NICK from " << client.getFd() << std::endl;
-    }
+    if (message.command == "NICK")
+        handleNick(server, client, message);
     else if (message.command == "USER")
-    {
-        std::cout << "USER from " << client.getFd() << std::endl;
-    }
+        handleUser(server, client, message);
     else if (message.command == "JOIN")
-    {
-        std::cout << "JOIN from " << client.getFd() << std::endl;
-    }
+        handleJoin(server, client, message);
     else if (message.command == "PRIVMSG")
+        handlePrivmsg(server, client, message);
+    else if (message.command == "QUIT")
+        handleQuit(server, client, message);
+    else if (message.command == "PING")
+        handlePing(server, client, message);
+}
+
+void	CommandHandler::sendMessage(Client& client, std::string msg)
+{
+	client.queueMessage(msg);
+}
+
+void CommandHandler::sendNumeric(Client& client, int code, const std::string& message)
+{
+    std::ostringstream response;
+
+    response << ":server " << std::setw(3) << std::setfill('0') \
+	<< code << " " << client.getNick() << " " << message << "\r\n";
+
+    sendMessage(client, response.str());
+}
+
+static bool isValidNick(const std::string& nick)
+{
+    if (nick.empty() || nick.size() > 9)
+        return (false);
+
+    if (!std::isalpha(nick[0]) && std::string("[]\\`_^{|}").find(nick[0]) == std::string::npos)
+        return (false);
+
+    for (size_t i = 1; i < nick.size(); ++i)
     {
-        std::cout << "PRIVMSG from " << client.getFd() << std::endl;
+        char c = nick[i];
+
+        if (!std::isalnum(c) && std::string("-[]\\`_^{|}").find(c) == std::string::npos)
+            return (false);
     }
-    else
+
+    return (true);
+}
+
+static bool isValidUsername(const std::string& username)
+{
+    if (username.empty())
+        return (false);
+
+    for (size_t i = 0; i < username.size(); ++i)
     {
-        std::cout << "Unknown command: " << message.command << std::endl;
+        unsigned char c = username[i];
+
+        if (c <= 0x20 || c == 0x40)
+            return (false);
     }
+
+    return (true);
+}
+
+void CommandHandler::handleNick(Server& server, Client& client, const Message& message)
+{
+    if (message.params.empty())
+    {
+        sendNumeric(client, IRC::ERR_NONICKNAMEGIVEN, ":No nickname given");
+        return;
+    }
+
+    if (!isValidNick(message.params[0]))
+    {
+        sendNumeric(client, IRC::ERR_ERRONEUSNICKNAME, message.params[0] + " :Erroneous nickname");
+        return;
+    }
+
+    if (server.isNickInUse(message.params[0]))
+    {
+        sendNumeric(client, IRC::ERR_NICKNAMEINUSE, message.params[0] + " :Nickname is already in use");
+        return;
+    }
+
+    client.setNick(message.params[0]);
+}
+
+void CommandHandler::handleUser(Server& server, Client& client, const Message& message)
+{
+	(void)server;
+	if (message.params.size() != 4)
+	{
+		sendMessage(client, "Error: incorrect number of parameters\n");
+		return;
+	}
+
+	if (!isValidUsername(message.params[0]))
+	{
+		sendMessage(client, "Error: invalid username\n");
+		return;
+	}
+}
+
+
+void CommandHandler::handleJoin(Server& server, Client& client, const Message& message)
+{
+	(void)server;
+	(void)client;
+	(void)message;
+}
+
+
+void CommandHandler::handlePrivmsg(Server& server, Client& client, const Message& message)
+{
+	(void)server;
+	(void)client;
+	(void)message;
+}
+
+void CommandHandler::handleQuit(Server& server, Client& client, const Message& message)
+{
+	(void)server;
+	(void)client;
+	(void)message;
+}
+
+void CommandHandler::handlePing(Server& server, Client& client, const Message& message)
+{
+	(void)server;
+	(void)client;
+	(void)message;
 }

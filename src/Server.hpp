@@ -15,6 +15,7 @@ public:
 
     bool	init();
     void	run();
+	bool	isNickInUse(std::string nick);
 
 private:
     int                 _serverFd;
@@ -34,6 +35,7 @@ private:
     void	removeDisconnectedClients();
     void	handleServerEvent(short events);
     void	handleClientEvent(Client& client, short events);
+	void	sendClientData(Client& client);
 };
 
 #endif
