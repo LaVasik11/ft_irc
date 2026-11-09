@@ -244,6 +244,13 @@ bool Server::isNickInUse(std::string nick)
 	return (false);
 }
 
+bool Server::tryClientPassword(std::string password)
+{
+	if (_password == password)
+		return (true);
+	return (false);
+}
+
 void Server::run()
 {
 	std::vector<struct pollfd>	pollFds;

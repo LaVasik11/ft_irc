@@ -16,6 +16,7 @@ public:
     bool	init();
     void	run();
 	bool	isNickInUse(std::string nick);
+	bool	tryClientPassword(std::string password);
 
 private:
     int                 _serverFd;

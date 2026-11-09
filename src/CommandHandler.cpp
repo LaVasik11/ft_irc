@@ -12,6 +12,8 @@ void CommandHandler::handle(Server& server, Client& client, const Message& messa
         handleNick(server, client, message);
     else if (message.command == "USER")
         handleUser(server, client, message);
+	else if (message.command == "PASS")
+		handlePass(server, client, message);
     else if (message.command == "JOIN")
         handleJoin(server, client, message);
     else if (message.command == "PRIVMSG")
@@ -20,6 +22,13 @@ void CommandHandler::handle(Server& server, Client& client, const Message& messa
         handleQuit(server, client, message);
     else if (message.command == "PING")
         handlePing(server, client, message);
+	else
+	{
+		std::ostringstream	error_msg;
+
+		error_msg << message.command << " :Unknown command";
+		sendNumeric(client, IRC::ERR_UNKNOWNCOMMAND, error_msg.str());
+	}
 }
 
 void	CommandHandler::sendMessage(Client& client, std::string msg)
@@ -29,7 +38,7 @@ void	CommandHandler::sendMessage(Client& client, std::string msg)
 
 void CommandHandler::sendNumeric(Client& client, int code, const std::string& message)
 {
-    std::ostringstream response;
+    std::ostringstream	response;
 
     response << ":server " << std::setw(3) << std::setfill('0') \
 	<< code << " " << client.getNick() << " " << message << "\r\n";
@@ -56,20 +65,13 @@ static bool isValidNick(const std::string& nick)
     return (true);
 }
 
-static bool isValidUsername(const std::string& username)
+void CommandHandler::tryRegister(Client& client)
 {
-    if (username.empty())
-        return (false);
-
-    for (size_t i = 0; i < username.size(); ++i)
-    {
-        unsigned char c = username[i];
-
-        if (c <= 0x20 || c == 0x40)
-            return (false);
-    }
-
-    return (true);
+	if (!client.getUsername().empty() && (!client.getNick().empty() && client.getNick() != "*") && client.hasPassword())
+	{
+		client.registerClient();
+		sendNumeric(client, IRC::RPL_WELCOME, ":Welcome to the IRC Network " + client.getNick());
+	}
 }
 
 void CommandHandler::handleNick(Server& server, Client& client, const Message& message)
@@ -93,24 +95,60 @@ void CommandHandler::handleNick(Server& server, Client& client, const Message& m
     }
 
     client.setNick(message.params[0]);
+	tryRegister(client);
 }
 
 void CommandHandler::handleUser(Server& server, Client& client, const Message& message)
 {
-	(void)server;
-	if (message.params.size() != 4)
-	{
-		sendMessage(client, "Error: incorrect number of parameters\n");
-		return;
-	}
+	if (client.isRegistered() || !client.getUsername().empty())
+    {
+        sendNumeric(client, IRC::ERR_ALREADYREGISTRED, ":You may not reregister");
+        return;
+    }
 
-	if (!isValidUsername(message.params[0]))
-	{
-		sendMessage(client, "Error: invalid username\n");
-		return;
-	}
+    if (message.params.size() != 4)
+    {
+        sendNumeric(client, IRC::ERR_NEEDMOREPARAMS, "USER :Not enough parameters");
+        return;
+    }
+
+    const std::string& username = message.params[0];
+    const std::string& mode = message.params[1];
+    const std::string& unused = message.params[2];
+    const std::string& realname = message.params[3];
+	(void)unused;
+	(void)mode;
+	(void)server;
+
+    client.setUsername(username);
+    client.setRealname(realname);
+    tryRegister(client);
 }
 
+
+void CommandHandler::handlePass(Server& server, Client& client, const Message& message)
+{
+	if (client.isRegistered() || client.hasPassword())
+	{
+		sendNumeric(client, IRC::ERR_ALREADYREGISTRED, "PASS :You may not reregister");
+		return;
+	}
+
+	if (message.params.empty())
+	{
+		sendNumeric(client, IRC::ERR_NEEDMOREPARAMS, "PASS :Not enough parameters");
+		return;
+	}
+
+	if (!server.tryClientPassword(message.params[0]))
+	{
+		sendNumeric(client, IRC::ERR_PASSWDMISMATCH, "PASS :Password incorrect");
+		return;
+	}
+
+	client.setPassword();
+	tryRegister(client);
+}
 
 void CommandHandler::handleJoin(Server& server, Client& client, const Message& message)
 {

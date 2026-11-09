@@ -1,6 +1,7 @@
 #include "Client.hpp"
 
-Client::Client(int fd) : _fd(fd), _disconnected(false), _nick("*") {}
+Client::Client(int fd) : _fd(fd), _disconnected(false), _nick("*"), _username(""), \
+	_realname(""), _hasPassword(false), _registered(false) {}
 
 int Client::getFd() const
 {
@@ -50,6 +51,26 @@ std::string Client::getNick()
 	return (_nick);
 }
 
+void Client::setUsername(std::string username)
+{
+	_username = username;
+}
+
+std::string Client::getUsername()
+{
+	return (_username);
+}
+
+void Client::setRealname(std::string realname)
+{
+	_realname = realname;
+}
+
+std::string Client::getRealname()
+{
+	return (_realname);
+}
+
 void Client::queueMessage(const std::string& message)
 {
     _sendBuffer += message;
@@ -66,4 +87,24 @@ void Client::removeSentData(size_t bytes)
         _sendBuffer.clear();
     else
         _sendBuffer.erase(0, bytes);
+}
+
+bool Client::isRegistered()
+{
+	return (_registered);
+}
+
+void Client::registerClient()
+{
+    _registered = true;
+}
+
+void Client::setPassword()
+{
+	_hasPassword = true;
+}
+
+bool Client::hasPassword()
+{
+	return (_hasPassword);
 }
