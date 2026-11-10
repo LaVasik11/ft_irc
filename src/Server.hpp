@@ -6,6 +6,8 @@
 #include "Client.hpp"
 #include "MessageParser.hpp"
 #include "CommandHandler.hpp"
+#include "Channel.hpp"
+
 
 class Server
 {
@@ -17,15 +19,17 @@ public:
     void	run();
 	bool	isNickInUse(std::string nick);
 	bool	tryClientPassword(std::string password);
+	void	addChannel(Client& owner, std::string title);
 
 private:
-    int                 _serverFd;
-    int                 _port;
-	std::string			_password;
-    bool                _running;
-    std::vector<Client>	_clients;
-	MessageParser  		_parser;
-	CommandHandler		_commandHandler;
+    int                 	_serverFd;
+    int                 	_port;
+	std::string				_password;
+    bool                	_running;
+    std::vector<Client>		_clients;
+	std::vector<Channel>	_channels;
+	MessageParser  			_parser;
+	CommandHandler			_commandHandler;
 
     int		createSocket();
     bool	setNonBlocking(int fd);

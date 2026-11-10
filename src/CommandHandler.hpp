@@ -21,6 +21,7 @@ private:
     void	handlePrivmsg(Server& server, Client& client, const Message& message);
     void	handleQuit(Server& server, Client& client, const Message& message);
     void	handlePing(Server& server, Client& client, const Message& message);
+	void	handleMode(Server& server, Client& client, const Message& message);
 
 	void	tryRegister(Client& client);
 };

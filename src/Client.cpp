@@ -1,7 +1,9 @@
 #include "Client.hpp"
+#include "Channel.hpp"
+#include <algorithm>
 
-Client::Client(int fd) : _fd(fd), _disconnected(false), _nick("*"), _username(""), \
-	_realname(""), _hasPassword(false), _registered(false) {}
+Client::Client(int fd) : _fd(fd), _disconnected(false), _nick("*"), \
+    _realname(""), _hasPassword(false), _registered(false) {}
 
 int Client::getFd() const
 {
@@ -43,32 +45,32 @@ bool Client::getNextMessage(std::string& message)
 
 void Client::setNick(std::string nick)
 {
-	_nick = nick;
+    _nick = nick;
 }
 
-std::string Client::getNick()
+std::string Client::getNick() const
 {
-	return (_nick);
+    return (_nick);
 }
 
 void Client::setUsername(std::string username)
 {
-	_username = username;
+    _username = username;
 }
 
-std::string Client::getUsername()
+std::string Client::getUsername() const
 {
-	return (_username);
+    return (_username);
 }
 
 void Client::setRealname(std::string realname)
 {
-	_realname = realname;
+    _realname = realname;
 }
 
-std::string Client::getRealname()
+std::string Client::getRealname() const
 {
-	return (_realname);
+    return (_realname);
 }
 
 void Client::queueMessage(const std::string& message)
@@ -91,7 +93,7 @@ void Client::removeSentData(size_t bytes)
 
 bool Client::isRegistered()
 {
-	return (_registered);
+    return (_registered);
 }
 
 void Client::registerClient()
@@ -101,10 +103,22 @@ void Client::registerClient()
 
 void Client::setPassword()
 {
-	_hasPassword = true;
+    _hasPassword = true;
 }
 
 bool Client::hasPassword()
 {
-	return (_hasPassword);
+    return (_hasPassword);
+}
+
+void Client::addChannel(Channel& channel)
+{
+    _channels.push_back(&channel);
+}
+
+bool Client::inChannel(const Channel& channel) const
+{
+    if (std::find(_channels.begin(), _channels.end(), &channel) != _channels.end())
+        return (true);
+    return (false);
 }

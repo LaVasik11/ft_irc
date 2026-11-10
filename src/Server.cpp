@@ -251,6 +251,11 @@ bool Server::tryClientPassword(std::string password)
 	return (false);
 }
 
+void Server::addChannel(Client& owner, std::string title)
+{
+	_channels.push_back(Channel(owner, title));
+}
+
 void Server::run()
 {
 	std::vector<struct pollfd>	pollFds;

@@ -22,6 +22,8 @@ void CommandHandler::handle(Server& server, Client& client, const Message& messa
         handleQuit(server, client, message);
     else if (message.command == "PING")
         handlePing(server, client, message);
+	else if (message.command == "MODE")
+		handleMode(server, client, message);
 	else
 	{
 		std::ostringstream	error_msg;
@@ -152,6 +154,12 @@ void CommandHandler::handlePass(Server& server, Client& client, const Message& m
 
 void CommandHandler::handleJoin(Server& server, Client& client, const Message& message)
 {
+	if (!client.isRegistered())
+	{
+		sendNumeric(client, IRC::ERR_NOTREGISTERED, "JOIN :You have not registered");
+		return;
+	}
+
 	(void)server;
 	(void)client;
 	(void)message;
@@ -160,6 +168,11 @@ void CommandHandler::handleJoin(Server& server, Client& client, const Message& m
 
 void CommandHandler::handlePrivmsg(Server& server, Client& client, const Message& message)
 {
+	if (!client.isRegistered())
+	{
+		sendNumeric(client, IRC::ERR_NOTREGISTERED, "PRIVMSG :You have not registered");
+		return;
+	}
 	(void)server;
 	(void)client;
 	(void)message;
@@ -174,6 +187,18 @@ void CommandHandler::handleQuit(Server& server, Client& client, const Message& m
 
 void CommandHandler::handlePing(Server& server, Client& client, const Message& message)
 {
+	(void)server;
+	(void)client;
+	(void)message;
+}
+
+void CommandHandler::handleMode(Server& server, Client& client, const Message& message)
+{
+	if (!client.isRegistered())
+	{
+		sendNumeric(client, IRC::ERR_NOTREGISTERED, "MODE :You have not registered");
+		return;
+	}
 	(void)server;
 	(void)client;
 	(void)message;
