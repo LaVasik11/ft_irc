@@ -15,8 +15,8 @@ Server::Server(int port, std::string password) : _serverFd(-1), _port(port), _pa
 
 Server::~Server()
 {
-    for (size_t i = 0; i < _clients.size(); i++)
-        close(_clients[i].getFd());
+    for (std::list<Client>::iterator it = _clients.begin(); it != _clients.end(); ++it)
+        close(it->getFd());
 
     if (_serverFd != -1)
         close(_serverFd);
@@ -199,23 +199,30 @@ void Server::handleClientEvent(Client& client, short events)
     if (events & POLLIN)
         handleClientData(client);
 
+    if (client.isDisconnected())
+        return;
+
+    if (events & POLLOUT)
+        sendClientData(client);
+
     if (events & POLLHUP)
         client.disconnect();
 }
 
 void Server::removeDisconnectedClients()
 {
-    for (size_t i = 0; i < _clients.size(); )
-    {
-        if (_clients[i].isDisconnected())
-        {
-            std::cout << "Client disconnected: " << _clients[i].getFd() << std::endl;
+    std::list<Client>::iterator it = _clients.begin();
 
-            close(_clients[i].getFd());
-            _clients.erase(_clients.begin() + i);
+    while (it != _clients.end())
+    {
+        if (it->isDisconnected())
+        {
+            std::cout << "Client disconnected: " << it->getFd() << std::endl;
+            close(it->getFd());
+            it = _clients.erase(it);
         }
         else
-            i++;
+            ++it;
     }
 }
 
@@ -226,7 +233,7 @@ void Server::sendClientData(Client& client)
     if (buffer.empty())
         return;
 
-    ssize_t sent = send(client.getFd(), buffer.c_str(), buffer.size(), 0);
+    ssize_t sent = send(client.getFd(), buffer.c_str(), buffer.size(), MSG_NOSIGNAL);
 
     if (sent > 0)
         client.removeSentData(sent);
@@ -236,12 +243,12 @@ void Server::sendClientData(Client& client)
 
 bool Server::isNickInUse(std::string nick)
 {
-	for (size_t i = 0; i < _clients.size(); i++)
-	{
-		if (_clients[i].getNick() == nick)
-			return (true);
-	}
-	return (false);
+    for (std::list<Client>::const_iterator it = _clients.begin(); it != _clients.end(); ++it)
+    {
+        if (it->getNick() == nick)
+            return (true);
+    }
+    return (false);
 }
 
 bool Server::tryClientPassword(std::string password)
@@ -251,35 +258,70 @@ bool Server::tryClientPassword(std::string password)
 	return (false);
 }
 
-void Server::addChannel(Client& owner, std::string title)
+Channel* Server::findChannel(const std::string& title)
 {
-	_channels.push_back(Channel(owner, title));
+    for (std::list<Channel>::iterator it = _channels.begin(); it != _channels.end(); ++it)
+    {
+        if (it->getTitle() == title)
+            return (&(*it));
+    }
+    return (NULL);
+}
+
+Channel& Server::addChannel(Client& owner, std::string title)
+{
+    _channels.push_back(Channel(owner, title));
+    Channel& channel = _channels.back();
+    channel.addMember(owner);
+    channel.addOperator(owner);
+    owner.addChannel(channel);
+
+    return (channel);
+}
+
+void Server::removeChannel(Channel* channel)
+{
+    for (std::list<Channel>::iterator it = _channels.begin(); it != _channels.end(); ++it)
+    {
+        if (&(*it) == channel)
+        {
+            _channels.erase(it);
+            return;
+        }
+    }
 }
 
 void Server::run()
 {
 	std::vector<struct pollfd>	pollFds;
+	std::vector<Client*>		pollClients;
 
     while (_running)
     {
 		pollFds.clear();
+		pollClients.clear();
 
-		struct pollfd				serverPoll;
+		struct pollfd serverPoll;
         serverPoll.fd = _serverFd;
         serverPoll.events = POLLIN;
         serverPoll.revents = 0;
 
         pollFds.push_back(serverPoll);
 
-        for (size_t i = 0; i < _clients.size(); i++)
-        {
-            struct pollfd	clientPoll;
-            clientPoll.fd = _clients[i].getFd();
-            clientPoll.events = POLLIN;
-            clientPoll.revents = 0;
+        for (std::list<Client>::iterator it = _clients.begin(); it != _clients.end(); ++it)
+		{
+			struct pollfd clientPoll;
 
-            pollFds.push_back(clientPoll);
-        }
+			clientPoll.fd = it->getFd();
+			clientPoll.events = POLLIN;
+			clientPoll.revents = 0;
+
+			if (!it->getSendBuffer().empty())
+				clientPoll.events |= POLLOUT;
+
+			pollFds.push_back(clientPoll);
+			pollClients.push_back(&(*it));
+		}
 
         int	ret = poll(&pollFds[0], pollFds.size(), -1);
 
@@ -295,14 +337,11 @@ void Server::run()
         if (pollFds[0].revents)
             handleServerEvent(pollFds[0].revents);
 
-        for (size_t i = 1; i < pollFds.size(); i++)
-        {
-            if (pollFds[i].revents)
-			{
-    			handleClientEvent(_clients[i - 1], pollFds[i].revents);
-				sendClientData(_clients[i - 1]);
-			}
-        }
+        for (size_t i = 1; i < pollFds.size(); ++i)
+		{
+			if (pollFds[i].revents)
+				handleClientEvent(*pollClients[i - 1], pollFds[i].revents);
+		}
 
         removeDisconnectedClients();
     }

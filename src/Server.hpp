@@ -2,6 +2,7 @@
 #define SERVER_HPP
 
 #include <vector>
+#include <list>
 #include <poll.h>
 #include "Client.hpp"
 #include "MessageParser.hpp"
@@ -15,19 +16,21 @@ public:
     Server(int port, std::string password);
     ~Server();
 
-    bool	init();
-    void	run();
-	bool	isNickInUse(std::string nick);
-	bool	tryClientPassword(std::string password);
-	void	addChannel(Client& owner, std::string title);
+    bool		init();
+    void		run();
+	bool		isNickInUse(std::string nick);
+	bool		tryClientPassword(std::string password);
+	Channel*	findChannel(const std::string& title);
+	Channel&	addChannel(Client& owner, std::string title);
+	void		removeChannel(Channel* channel);
 
 private:
     int                 	_serverFd;
     int                 	_port;
 	std::string				_password;
     bool                	_running;
-    std::vector<Client>		_clients;
-	std::vector<Channel>	_channels;
+    std::list<Client>		_clients;
+	std::list<Channel>		_channels;
 	MessageParser  			_parser;
 	CommandHandler			_commandHandler;
 

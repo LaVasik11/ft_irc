@@ -14,7 +14,7 @@ void Channel::addMember(Client& client)
 
 void Channel::removeMember(Client& client)
 {
-    std::vector<Client*>::iterator it;
+    std::vector<Client*>::iterator	it;
 
     it = std::find(_members.begin(), _members.end(), &client);
     if (it != _members.end())
@@ -27,8 +27,7 @@ void Channel::removeMember(Client& client)
 
 void Channel::addOperator(Client& client)
 {
-    if (hasMember(client) &&
-        std::find(_operators.begin(), _operators.end(), &client) == _operators.end())
+    if (hasMember(client) && std::find(_operators.begin(), _operators.end(), &client) == _operators.end())
         _operators.push_back(&client);
 }
 
@@ -79,6 +78,13 @@ bool Channel::hasMember(const Client& client) const
     return (false);
 }
 
+bool Channel::hasOperator(const Client& client) const
+{
+    if (std::find(_operators.begin(), _operators.end(), &client) != _operators.end())
+        return (true);
+    return (false);
+}
+
 size_t Channel::getUserLimit() const
 {
     return (_userLimit);
@@ -87,4 +93,8 @@ size_t Channel::getUserLimit() const
 size_t Channel::getMembersCount() const
 {
     return (_members.size());
+}
+const std::vector<Client*>& Channel::getMembers() const
+{
+    return (_members);
 }

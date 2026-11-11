@@ -122,3 +122,20 @@ bool Client::inChannel(const Channel& channel) const
         return (true);
     return (false);
 }
+
+const std::vector<Channel*>& Client::getChannels() const
+{
+    return (_channels);
+}
+
+void Client::removeChannel(Channel& channel)
+{
+    for (std::vector<Channel*>::iterator it = _channels.begin(); it != _channels.end(); ++it)
+    {
+        if (*it == &channel)
+        {
+            _channels.erase(it);
+            return;
+        }
+    }
+}
