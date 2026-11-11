@@ -24,6 +24,8 @@ void CommandHandler::handle(Server& server, Client& client, const Message& messa
         handlePing(server, client, message);
 	else if (message.command == "MODE")
 		handleMode(server, client, message);
+	else if (message.command == "TOPIC")
+		handleTopic(server, client, message);
 	else
 	{
 		std::ostringstream	error_msg;
@@ -114,7 +116,7 @@ void CommandHandler::joinChannel(Server& server, Client& client, const std::stri
     const std::vector<Client*>&	members = channel->getMembers();
 
     for (size_t i = 0; i < members.size(); ++i)
-        members[i]->queueMessage(joinMessage);
+        sendMessage(*members[i], joinMessage);
 
     if (!channel->getTopic().empty())
         sendNumeric(client, IRC::RPL_LIST, title + " :" + channel->getTopic());
@@ -274,10 +276,8 @@ void CommandHandler::handleJoin(Server& server, Client& client, const Message& m
 void CommandHandler::handlePrivmsg(Server& server, Client& client, const Message& message)
 {
 	if (!client.isRegistered())
-	{
-		sendNumeric(client, IRC::ERR_NOTREGISTERED, "PRIVMSG :You have not registered");
-		return;
-	}
+		return (sendNumeric(client, IRC::ERR_NOTREGISTERED, "PRIVMSG :You have not registered"));
+
 	(void)server;
 	(void)client;
 	(void)message;
@@ -300,11 +300,46 @@ void CommandHandler::handlePing(Server& server, Client& client, const Message& m
 void CommandHandler::handleMode(Server& server, Client& client, const Message& message)
 {
 	if (!client.isRegistered())
-	{
-		sendNumeric(client, IRC::ERR_NOTREGISTERED, "MODE :You have not registered");
-		return;
-	}
+		return (sendNumeric(client, IRC::ERR_NOTREGISTERED, "MODE :You have not registered"));
+
 	(void)server;
 	(void)client;
 	(void)message;
+}
+
+void CommandHandler::handleTopic(Server& server, Client& client, const Message& message)
+{
+    if (!client.isRegistered())
+        return (sendNumeric(client, IRC::ERR_NOTREGISTERED, "TOPIC :You have not registered"));
+
+    if (message.params.empty())
+        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS, "TOPIC :Not enough parameters"));
+
+    Channel* channel = server.findChannel(message.params[0]);
+
+    if (!channel)
+        return (sendNumeric(client, IRC::ERR_NOSUCHCHANNEL, message.params[0] + " :No such channel"));
+
+    if (!channel->hasMember(client))
+        return (sendNumeric(client, IRC::ERR_NOTONCHANNEL, message.params[0] + " :You're not on that channel"));
+
+    if (message.params.size() == 1)
+    {
+        if (channel->getTopic().empty())
+            return (sendNumeric(client, IRC::RPL_NOTOPIC, message.params[0] + " :No topic is set"));
+
+        return (sendNumeric(client, IRC::RPL_TOPIC, message.params[0] + " :" + channel->getTopic()));
+    }
+
+    if (channel->isTopicRestricted() && !channel->hasOperator(client))
+        return (sendNumeric(client, IRC::ERR_CHANOPRIVSNEEDED, message.params[0] + " :You're not a channel operator"));
+
+    channel->setTopic(message.params[1]);
+
+	std::string	prefix = ":" + client.getNick() + "!" + client.getUsername() + "@localhost";
+	std::string reply = prefix + " TOPIC " + channel->getTitle() + " :" + channel->getTopic() + "\r\n";
+	const std::vector<Client*>&	members = channel->getMembers();
+
+    for (size_t i = 0; i < members.size(); ++i)
+		sendMessage(*members[i], reply);
 }

@@ -98,3 +98,13 @@ const std::vector<Client*>& Channel::getMembers() const
 {
     return (_members);
 }
+
+const Client* Channel::getOwner() const
+{
+    return (_owner);
+}
+
+void Channel::setTopic(std::string topic)
+{
+	_topic = topic;
+}

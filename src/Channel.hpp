@@ -20,6 +20,8 @@ public:
     std::string 				getTopic() const;
     std::string 				getPassword() const;
 
+	void						setTopic(std::string topic);
+
     bool        				isInviteOnly() const;
     bool        				isTopicRestricted() const;
     bool        				hasPassword() const;
@@ -30,6 +32,7 @@ public:
     size_t      				getUserLimit() const;
     size_t      				getMembersCount() const;
 	const std::vector<Client*>&	getMembers() const;
+	const Client*				getOwner() const;
 
 private:
     Client*                 _owner;
