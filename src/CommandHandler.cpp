@@ -71,8 +71,8 @@ bool isValidNick(const std::string& nick)
 
 std::string getChannelModes(const Channel& channel)
 {
-    std::string modes = "+";
-    std::ostringstream arguments;
+    std::string			modes = "+";
+    std::ostringstream	arguments;
 
     if (channel.isInviteOnly())
         modes += "i";
@@ -144,7 +144,7 @@ ModeValidationResult CommandHandler::validateModes(const Channel& channel, \
                 if (change.argument.empty())
                 {
                     errorArgument = change.argument;
-                    return (MODE_VALIDATION_INVALID_LIMIT);
+                    return (MODE_VALIDATION_INVALID_ARGUMENT);
                 }
 
                 hasPassword = true;
@@ -160,9 +160,8 @@ ModeValidationResult CommandHandler::validateModes(const Channel& channel, \
                 if (!isValidLimit(change.argument))
                 {
                     errorArgument = change.argument;
-                    return (MODE_VALIDATION_INVALID_LIMIT);
+                    return (MODE_VALIDATION_INVALID_ARGUMENT);
                 }
-
             }
         }
 
@@ -211,8 +210,8 @@ void CommandHandler::applyModes(Channel& channel, const std::vector<ModeChange>&
         {
             if (change.enabled)
             {
-                std::istringstream stream(change.argument);
-                size_t limit;
+                std::istringstream	stream(change.argument);
+                size_t				limit;
 
                 stream >> limit;
                 channel.setUserLimit(limit);
@@ -235,17 +234,12 @@ void CommandHandler::applyModes(Channel& channel, const std::vector<ModeChange>&
 
 ModeParseResult CommandHandler::parseModes(const Message& message, std::vector<ModeChange>& changes, char& invalidMode)
 {
-    if (message.params.size() < 2)
-        return (MODE_PARSE_MISSING_ARGUMENT);
-
-    const std::string& modestring = message.params[1];
-
-    size_t argIndex = 2;
-    size_t argumentModes = 0;
-
-    bool enabled = true;
-    bool signFound = false;
-    bool lastWasSign = false;
+    const std::string&	modestring = message.params[1];
+    size_t				argIndex = 2;
+    size_t				argumentModes = 0;
+    bool				enabled = true;
+    bool				signFound = false;
+    bool				lastWasSign = false;
 
     for (size_t i = 0; i < modestring.size(); ++i)
     {
@@ -300,7 +294,7 @@ ModeParseResult CommandHandler::parseModes(const Message& message, std::vector<M
     return (MODE_PARSE_SUCCESS);
 }
 
-void CommandHandler::joinChannel(Server& server, Client& client, const std::string& title, const std::string& key)
+void CommandHandler::joinChannel(Server& server, Client& client, const std::string& title, const std::string& password)
 {
     if (title.empty() || title.size() > 50 || (title[0] != '#' && title[0] != '&'))
     {
@@ -327,7 +321,7 @@ void CommandHandler::joinChannel(Server& server, Client& client, const std::stri
         if (channel->hasMember(client))
             return;
 
-        if (channel->hasPassword() && channel->getPassword() != key)
+        if (channel->hasPassword() && channel->getPassword() != password)
             return (sendNumeric(client, IRC::ERR_BADCHANNELKEY, title + " :Cannot join channel (+k)"));
 
 
@@ -487,19 +481,19 @@ void CommandHandler::handleJoin(Server& server, Client& client, const Message& m
         return handleJoinZero(server, client);
 
     std::vector<std::string> channels = split(message.params[0], ',');
-    std::vector<std::string> keys;
+    std::vector<std::string> passwords;
 
     if (message.params.size() > 1)
-        keys = split(message.params[1], ',');
+        passwords = split(message.params[1], ',');
 
     for (size_t i = 0; i < channels.size(); ++i)
     {
-        std::string key;
+        std::string password;
 
-        if (i < keys.size())
-            key = keys[i];
+        if (i < passwords.size())
+            password = passwords[i];
 
-        joinChannel(server, client, channels[i], key);
+        joinChannel(server, client, channels[i], password);
     }
 }
 
@@ -531,82 +525,64 @@ void CommandHandler::handlePing(Server& server, Client& client, const Message& m
 void CommandHandler::handleMode(Server& server, Client& client, const Message& message)
 {
     if (!client.isRegistered())
-        return (sendNumeric(client, IRC::ERR_NOTREGISTERED,
-            "MODE :You have not registered"));
+        return (sendNumeric(client, IRC::ERR_NOTREGISTERED, "MODE :You have not registered"));
 
     if (message.params.empty())
-        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS,
-            "MODE :Not enough parameters"));
+        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS, "MODE :Not enough parameters"));
 
     Channel* channel = server.findChannel(message.params[0]);
 
     if (!channel)
-        return (sendNumeric(client, IRC::ERR_NOSUCHCHANNEL,
-            message.params[0] + " :No such channel"));
+        return (sendNumeric(client, IRC::ERR_NOSUCHCHANNEL, message.params[0] + " :No such channel"));
 
     if (message.params.size() == 1)
-        return (sendNumeric(client, IRC::RPL_CHANNELMODEIS,
-            channel->getTitle() + " " + getChannelModes(*channel)));
+        return (sendNumeric(client, IRC::RPL_CHANNELMODEIS, channel->getTitle() + " " + getChannelModes(*channel)));
 
     if (!channel->hasOperator(client))
-        return (sendNumeric(client, IRC::ERR_CHANOPRIVSNEEDED,
-            channel->getTitle() + " :You're not channel operator"));
+        return (sendNumeric(client, IRC::ERR_CHANOPRIVSNEEDED, channel->getTitle() + " :You're not channel operator"));
 
-    std::vector<ModeChange> changes;
-    char invalidMode = '\0';
-
-    ModeParseResult parseResult = parseModes(message, changes, invalidMode);
+    std::vector<ModeChange>	changes;
+    char					invalidMode = '\0';
+    ModeParseResult			parseResult = parseModes(message, changes, invalidMode);
 
     if (parseResult == MODE_PARSE_UNKNOWN)
     {
         std::string error(1, invalidMode);
-
-        return (sendNumeric(client, IRC::ERR_UNKNOWNMODE,
-            error + " :is unknown mode char to me"));
+        return (sendNumeric(client, IRC::ERR_UNKNOWNMODE, error + " :is unknown mode char to me"));
     }
 
     if (parseResult == MODE_PARSE_MISSING_ARGUMENT)
-        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS,
-            "MODE :Not enough parameters"));
+        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS, "MODE :Not enough parameters"));
 
     if (parseResult == MODE_PARSE_TOO_MANY_ARGUMENTS)
-        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS,
-            "MODE :Too many mode parameters"));
+        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS, "MODE :Too many mode parameters"));
 
     if (parseResult != MODE_PARSE_SUCCESS)
         return;
 
     std::string errorArgument;
 
-    ModeValidationResult validationResult =
-        validateModes(*channel, changes, server, errorArgument);
+    ModeValidationResult validationResult = validateModes(*channel, changes, server, errorArgument);
 
     if (validationResult == MODE_VALIDATION_KEYSET)
-        return (sendNumeric(client, IRC::ERR_KEYSET,
-            channel->getTitle() + " :Channel key already set"));
+        return (sendNumeric(client, IRC::ERR_KEYSET, channel->getTitle() + " :Channel key already set"));
 
-    if (validationResult == MODE_VALIDATION_INVALID_LIMIT)
-        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS,
-            "MODE :Invalid mode parameter"));
+    if (validationResult == MODE_VALIDATION_INVALID_ARGUMENT)
+        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS, "MODE :Invalid mode parameter"));
 
-    if (validationResult == MODE_VALIDATION_NO_SUCH_NICK)
-        return (sendNumeric(client, IRC::ERR_NOSUCHNICK,
-            errorArgument + " :No such nick"));
+    if (validationResult == MODE_VALIDATION_NO_SUCH_NICK) 
+		return (sendNumeric(client, IRC::ERR_NOSUCHNICK, errorArgument + " :No such nick"));
 
     if (validationResult == MODE_VALIDATION_USER_NOT_IN_CHANNEL)
-        return (sendNumeric(client, IRC::ERR_USERNOTINCHANNEL,
-            errorArgument + " " + channel->getTitle() +
-            " :They aren't on that channel"));
+        return (sendNumeric(client, IRC::ERR_USERNOTINCHANNEL, errorArgument + " " + channel->getTitle() + " :They aren't on that channel"));
 
     if (validationResult != MODE_VALIDATION_SUCCESS)
         return;
 
     applyModes(*channel, changes, server);
 
-    std::string prefix = ":" + client.getNick() + "!" +
-        client.getUsername() + "@localhost";
-
-    std::string reply = prefix + " MODE " + channel->getTitle();
+    std::string	prefix = ":" + client.getNick() + "!" + client.getUsername() + "@localhost";
+    std::string	reply = prefix + " MODE " + channel->getTitle();
 
     for (size_t i = 1; i < message.params.size(); ++i)
         reply += " " + message.params[i];
@@ -616,7 +592,7 @@ void CommandHandler::handleMode(Server& server, Client& client, const Message& m
     const std::vector<Client*>& members = channel->getMembers();
 
     for (size_t i = 0; i < members.size(); ++i)
-        members[i]->queueMessage(reply);
+        sendMessage(*members[i], reply);
 }
 
 void CommandHandler::handleTopic(Server& server, Client& client, const Message& message)
