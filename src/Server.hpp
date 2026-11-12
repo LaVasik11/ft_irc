@@ -23,6 +23,7 @@ public:
 	Channel*	findChannel(const std::string& title);
 	Channel&	addChannel(Client& owner, std::string title);
 	void		removeChannel(Channel* channel);
+	Client*		findClient(std::string client);
 
 private:
     int                 	_serverFd;

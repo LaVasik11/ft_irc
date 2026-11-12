@@ -50,7 +50,7 @@ void CommandHandler::sendNumeric(Client& client, int code, const std::string& me
     sendMessage(client, response.str());
 }
 
-static bool isValidNick(const std::string& nick)
+bool isValidNick(const std::string& nick)
 {
     if (nick.empty() || nick.size() > 9)
         return (false);
@@ -67,6 +67,237 @@ static bool isValidNick(const std::string& nick)
     }
 
     return (true);
+}
+
+std::string getChannelModes(const Channel& channel)
+{
+    std::string modes = "+";
+    std::ostringstream arguments;
+
+    if (channel.isInviteOnly())
+        modes += "i";
+
+    if (channel.isTopicRestricted())
+        modes += "t";
+
+    if (channel.hasPassword())
+    {
+        modes += "k";
+        arguments << " " << channel.getPassword();
+    }
+
+    if (channel.hasUserLimit())
+    {
+        modes += "l";
+        arguments << " " << channel.getUserLimit();
+    }
+
+    return (modes + arguments.str());
+}
+
+bool modeNeedsArgument(char mode, bool enabled)
+{
+    if (mode == 'k' || mode == 'o')
+        return (true);
+
+    if (mode == 'l' && enabled)
+        return (true);
+
+    return (false);
+}
+
+bool isValidLimit(const std::string& value)
+{
+    if (value.empty())
+        return (false);
+
+    for (size_t i = 0; i < value.size(); ++i)
+    {
+        if (!std::isdigit(static_cast<unsigned char>(value[i])))
+            return (false);
+    }
+
+    std::istringstream	stream(value);
+    size_t				limit;
+
+    stream >> limit;
+
+    return (!stream.fail() && stream.eof() && limit > 0);
+}
+
+ModeValidationResult CommandHandler::validateModes(const Channel& channel, \
+	const std::vector<ModeChange>& changes, Server& server, std::string& errorArgument)
+{
+    bool hasPassword = channel.hasPassword();
+
+    for (size_t i = 0; i < changes.size(); ++i)
+    {
+        const ModeChange& change = changes[i];
+
+        if (change.mode == 'k')
+        {
+            if (change.enabled)
+            {
+                if (hasPassword)
+                    return (MODE_VALIDATION_KEYSET);
+
+                if (change.argument.empty())
+                {
+                    errorArgument = change.argument;
+                    return (MODE_VALIDATION_INVALID_LIMIT);
+                }
+
+                hasPassword = true;
+            }
+            else
+                hasPassword = false;
+        }
+
+        else if (change.mode == 'l')
+        {
+            if (change.enabled)
+            {
+                if (!isValidLimit(change.argument))
+                {
+                    errorArgument = change.argument;
+                    return (MODE_VALIDATION_INVALID_LIMIT);
+                }
+
+            }
+        }
+
+        else if (change.mode == 'o')
+        {
+            Client* target = server.findClient(change.argument);
+
+            if (!target)
+            {
+                errorArgument = change.argument;
+                return (MODE_VALIDATION_NO_SUCH_NICK);
+            }
+
+            if (!channel.hasMember(*target))
+            {
+                errorArgument = change.argument;
+                return (MODE_VALIDATION_USER_NOT_IN_CHANNEL);
+            }
+        }
+    }
+
+    return (MODE_VALIDATION_SUCCESS);
+}
+
+void CommandHandler::applyModes(Channel& channel, const std::vector<ModeChange>& changes, Server& server)
+{
+    for (size_t i = 0; i < changes.size(); ++i)
+    {
+        const ModeChange& change = changes[i];
+
+        if (change.mode == 'i')
+            channel.setInviteOnly(change.enabled);
+
+        else if (change.mode == 't')
+            channel.setTopicRestricted(change.enabled);
+
+        else if (change.mode == 'k')
+        {
+            if (change.enabled)
+                channel.setPassword(change.argument);
+            else
+                channel.removePassword();
+        }
+
+        else if (change.mode == 'l')
+        {
+            if (change.enabled)
+            {
+                std::istringstream stream(change.argument);
+                size_t limit;
+
+                stream >> limit;
+                channel.setUserLimit(limit);
+            }
+            else
+                channel.removeUserLimit();
+        }
+
+        else if (change.mode == 'o')
+        {
+            Client* target = server.findClient(change.argument);
+
+            if (change.enabled)
+                channel.addOperator(*target);
+            else
+                channel.removeOperator(*target);
+        }
+    }
+}
+
+ModeParseResult CommandHandler::parseModes(const Message& message, std::vector<ModeChange>& changes, char& invalidMode)
+{
+    if (message.params.size() < 2)
+        return (MODE_PARSE_MISSING_ARGUMENT);
+
+    const std::string& modestring = message.params[1];
+
+    size_t argIndex = 2;
+    size_t argumentModes = 0;
+
+    bool enabled = true;
+    bool signFound = false;
+    bool lastWasSign = false;
+
+    for (size_t i = 0; i < modestring.size(); ++i)
+    {
+        char c = modestring[i];
+
+        if (c == '+' || c == '-')
+        {
+            if (lastWasSign)
+                return (MODE_PARSE_INVALID_SYNTAX);
+
+            enabled = (c == '+');
+            signFound = true;
+            lastWasSign = true;
+            continue;
+        }
+
+        if (!signFound)
+            return (MODE_PARSE_INVALID_SYNTAX);
+
+        if (c != 'i' && c != 't' && c != 'k' && c != 'l' && c != 'o')
+        {
+            invalidMode = c;
+            return (MODE_PARSE_UNKNOWN);
+        }
+
+        lastWasSign = false;
+
+        ModeChange change;
+        change.mode = c;
+        change.enabled = enabled;
+
+        if (modeNeedsArgument(c, enabled))
+        {
+            ++argumentModes;
+
+            if (argumentModes > 3)
+                return (MODE_PARSE_TOO_MANY_ARGUMENTS);
+
+            if (argIndex >= message.params.size())
+                return (MODE_PARSE_MISSING_ARGUMENT);
+
+            change.argument = message.params[argIndex];
+            ++argIndex;
+        }
+
+        changes.push_back(change);
+    }
+
+    if (changes.empty() || lastWasSign)
+        return (MODE_PARSE_INVALID_SYNTAX);
+
+    return (MODE_PARSE_SUCCESS);
 }
 
 void CommandHandler::joinChannel(Server& server, Client& client, const std::string& title, const std::string& key)
@@ -156,7 +387,7 @@ void CommandHandler::handleJoinZero(Server& server, Client& client)
         for (size_t j = 0; j < members.size(); ++j)
             members[j]->queueMessage(message);
 
-        channel->removeMember(client);
+		channel->removeMember(client);
         client.removeChannel(*channel);
 
         if (channel->getMembersCount() == 0)
@@ -299,12 +530,93 @@ void CommandHandler::handlePing(Server& server, Client& client, const Message& m
 
 void CommandHandler::handleMode(Server& server, Client& client, const Message& message)
 {
-	if (!client.isRegistered())
-		return (sendNumeric(client, IRC::ERR_NOTREGISTERED, "MODE :You have not registered"));
+    if (!client.isRegistered())
+        return (sendNumeric(client, IRC::ERR_NOTREGISTERED,
+            "MODE :You have not registered"));
 
-	(void)server;
-	(void)client;
-	(void)message;
+    if (message.params.empty())
+        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS,
+            "MODE :Not enough parameters"));
+
+    Channel* channel = server.findChannel(message.params[0]);
+
+    if (!channel)
+        return (sendNumeric(client, IRC::ERR_NOSUCHCHANNEL,
+            message.params[0] + " :No such channel"));
+
+    if (message.params.size() == 1)
+        return (sendNumeric(client, IRC::RPL_CHANNELMODEIS,
+            channel->getTitle() + " " + getChannelModes(*channel)));
+
+    if (!channel->hasOperator(client))
+        return (sendNumeric(client, IRC::ERR_CHANOPRIVSNEEDED,
+            channel->getTitle() + " :You're not channel operator"));
+
+    std::vector<ModeChange> changes;
+    char invalidMode = '\0';
+
+    ModeParseResult parseResult = parseModes(message, changes, invalidMode);
+
+    if (parseResult == MODE_PARSE_UNKNOWN)
+    {
+        std::string error(1, invalidMode);
+
+        return (sendNumeric(client, IRC::ERR_UNKNOWNMODE,
+            error + " :is unknown mode char to me"));
+    }
+
+    if (parseResult == MODE_PARSE_MISSING_ARGUMENT)
+        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS,
+            "MODE :Not enough parameters"));
+
+    if (parseResult == MODE_PARSE_TOO_MANY_ARGUMENTS)
+        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS,
+            "MODE :Too many mode parameters"));
+
+    if (parseResult != MODE_PARSE_SUCCESS)
+        return;
+
+    std::string errorArgument;
+
+    ModeValidationResult validationResult =
+        validateModes(*channel, changes, server, errorArgument);
+
+    if (validationResult == MODE_VALIDATION_KEYSET)
+        return (sendNumeric(client, IRC::ERR_KEYSET,
+            channel->getTitle() + " :Channel key already set"));
+
+    if (validationResult == MODE_VALIDATION_INVALID_LIMIT)
+        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS,
+            "MODE :Invalid mode parameter"));
+
+    if (validationResult == MODE_VALIDATION_NO_SUCH_NICK)
+        return (sendNumeric(client, IRC::ERR_NOSUCHNICK,
+            errorArgument + " :No such nick"));
+
+    if (validationResult == MODE_VALIDATION_USER_NOT_IN_CHANNEL)
+        return (sendNumeric(client, IRC::ERR_USERNOTINCHANNEL,
+            errorArgument + " " + channel->getTitle() +
+            " :They aren't on that channel"));
+
+    if (validationResult != MODE_VALIDATION_SUCCESS)
+        return;
+
+    applyModes(*channel, changes, server);
+
+    std::string prefix = ":" + client.getNick() + "!" +
+        client.getUsername() + "@localhost";
+
+    std::string reply = prefix + " MODE " + channel->getTitle();
+
+    for (size_t i = 1; i < message.params.size(); ++i)
+        reply += " " + message.params[i];
+
+    reply += "\r\n";
+
+    const std::vector<Client*>& members = channel->getMembers();
+
+    for (size_t i = 0; i < members.size(); ++i)
+        members[i]->queueMessage(reply);
 }
 
 void CommandHandler::handleTopic(Server& server, Client& client, const Message& message)
@@ -315,9 +627,9 @@ void CommandHandler::handleTopic(Server& server, Client& client, const Message& 
     if (message.params.empty())
         return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS, "TOPIC :Not enough parameters"));
 
-    Channel* channel = server.findChannel(message.params[0]);
 
-    if (!channel)
+    Channel* channel = server.findChannel(message.params[0]);
+	if (!channel)
         return (sendNumeric(client, IRC::ERR_NOSUCHCHANNEL, message.params[0] + " :No such channel"));
 
     if (!channel->hasMember(client))

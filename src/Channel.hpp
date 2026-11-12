@@ -34,12 +34,19 @@ public:
 	const std::vector<Client*>&	getMembers() const;
 	const Client*				getOwner() const;
 
+	void						setInviteOnly(bool enabled);
+	void						setTopicRestricted(bool enabled);
+	void						removePassword();
+	void						setUserLimit(size_t limit);
+	void						removeUserLimit();
+	void						removeOperator(Client& client);
+
 private:
     Client*                 _owner;
     std::string             _title;
-    std::string             _topic;
-    std::string             _password;
-    int                     _userLimit;
+    std::string            	_topic;
+    std::string				_password;
+    size_t					_userLimit;
     bool                    _inviteOnly;
     bool                    _topicRestricted;
     std::vector<Client*>    _members;

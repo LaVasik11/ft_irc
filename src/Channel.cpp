@@ -4,7 +4,10 @@
 
 Channel::Channel(Client& owner, std::string title)
     : _owner(&owner), _title(title), _userLimit(0),
-      _inviteOnly(false), _topicRestricted(false) {}
+      _inviteOnly(false), _topicRestricted(false) 
+{
+	_operators.push_back(&owner);
+}
 
 void Channel::addMember(Client& client)
 {
@@ -29,6 +32,15 @@ void Channel::addOperator(Client& client)
 {
     if (hasMember(client) && std::find(_operators.begin(), _operators.end(), &client) == _operators.end())
         _operators.push_back(&client);
+}
+
+void Channel::removeOperator(Client& client)
+{
+	std::vector<Client*>::iterator	it;
+
+	it = std::find(_operators.begin(), _operators.end(), &client);
+	if (it != _operators.end())
+		_operators.erase(it);
 }
 
 void Channel::setPassword(std::string password)
@@ -107,4 +119,30 @@ const Client* Channel::getOwner() const
 void Channel::setTopic(std::string topic)
 {
 	_topic = topic;
+}
+
+void Channel::setInviteOnly(bool enabled)
+{
+    _inviteOnly = enabled;
+}
+
+void Channel::setTopicRestricted(bool enabled)
+{
+    _topicRestricted = enabled;
+}
+
+
+void Channel::removePassword()
+{
+    _password.clear();
+}
+
+void Channel::setUserLimit(size_t limit)
+{
+    _userLimit = limit;
+}
+
+void Channel::removeUserLimit()
+{
+    _userLimit = 0;
 }

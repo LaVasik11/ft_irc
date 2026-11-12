@@ -218,6 +218,15 @@ void Server::removeDisconnectedClients()
         if (it->isDisconnected())
         {
             std::cout << "Client disconnected: " << it->getFd() << std::endl;
+
+            std::vector<Channel*> channels = it->getChannels();
+
+            for (size_t i = 0; i < channels.size(); ++i)
+			{
+                channels[i]->removeMember(*it);
+				if (channels[i]->getMembersCount() == 0)
+					removeChannel(channels[i]);
+			}
             close(it->getFd());
             it = _clients.erase(it);
         }
@@ -289,6 +298,16 @@ void Server::removeChannel(Channel* channel)
             return;
         }
     }
+}
+
+Client* Server::findClient(std::string client)
+{
+	for (std::list<Client>::iterator it = _clients.begin(); it != _clients.end(); ++it)
+    {
+        if (it->getNick() == client)
+            return (&(*it));
+    }
+    return (NULL);
 }
 
 void Server::run()
