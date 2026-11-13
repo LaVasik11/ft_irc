@@ -53,6 +53,8 @@ private:
     void						handlePing(Server& server, Client& client, const Message& message);
 	void						handleMode(Server& server, Client& client, const Message& message);
 	void						handleTopic(Server& server, Client& client, const Message& message);
+	void						handleKick(Server& server, Client& client, const Message& message);
+	void						handleInvite(Server& server, Client& client, const Message& message);
 
 	void						tryRegister(Client& client);
 	std::vector<std::string>	split(const std::string& str, char delimiter);

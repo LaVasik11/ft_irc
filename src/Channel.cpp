@@ -146,3 +146,16 @@ void Channel::removeUserLimit()
 {
     _userLimit = 0;
 }
+
+bool Channel::hasInvited(const Client& client) const
+{
+	if (std::find(_invitedClients.begin(), _invitedClients.end(), &client) != _invitedClients.end())
+        return (true);
+    return (false);
+}
+
+void Channel::addInvited(Client& client)
+{
+	if (!hasInvited(client))
+		_invitedClients.push_back(&client);
+}

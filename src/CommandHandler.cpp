@@ -26,6 +26,10 @@ void CommandHandler::handle(Server& server, Client& client, const Message& messa
 		handleMode(server, client, message);
 	else if (message.command == "TOPIC")
 		handleTopic(server, client, message);
+	else if (message.command == "KICK")
+		handleKick(server, client, message);
+	else if (message.command == "INVITE")
+		handleInvite(server, client, message);
 	else
 	{
 		std::ostringstream	error_msg;
@@ -297,25 +301,18 @@ ModeParseResult CommandHandler::parseModes(const Message& message, std::vector<M
 void CommandHandler::joinChannel(Server& server, Client& client, const std::string& title, const std::string& password)
 {
     if (title.empty() || title.size() > 50 || (title[0] != '#' && title[0] != '&'))
-    {
-        sendNumeric(client, IRC::ERR_BADCHANMASK, title + " :Bad Channel Mask");
-        return;
-    }
+        return (sendNumeric(client, IRC::ERR_BADCHANMASK, title + " :Bad Channel Mask"));
 
     for (size_t i = 0; i < title.size(); ++i)
     {
-        if (title[i] == ' ' || title[i] == ',' || title[i] == '\r' \
-			|| title[i] == '\n' || title[i] == '\0' || title[i] == '\a')
-        {
-            sendNumeric(client, IRC::ERR_BADCHANMASK, title + " :Bad Channel Mask");
-            return;
-        }
+        if (title[i] == ' ' || title[i] == ',' || title[i] == '\r' || title[i] == '\n' || title[i] == '\0' || title[i] == '\a')
+            return (sendNumeric(client, IRC::ERR_BADCHANMASK, title + " :Bad Channel Mask"));
     }
 
     Channel* channel = server.findChannel(title);
-
     if (!channel)
         channel = &server.addChannel(client, title);
+
     else
     {
         if (channel->hasMember(client))
@@ -325,9 +322,8 @@ void CommandHandler::joinChannel(Server& server, Client& client, const std::stri
             return (sendNumeric(client, IRC::ERR_BADCHANNELKEY, title + " :Cannot join channel (+k)"));
 
 
-        if (channel->isInviteOnly())
+        if (channel->isInviteOnly() && !channel->hasInvited(client))
             return (sendNumeric(client, IRC::ERR_INVITEONLYCHAN, title + " :Cannot join channel (+i)"));
-
 
         if (channel->hasUserLimit() && channel->getMembersCount() >= channel->getUserLimit())
             return (sendNumeric(client, IRC::ERR_CHANNELISFULL, title + " :Cannot join channel (+l)"));
@@ -630,4 +626,110 @@ void CommandHandler::handleTopic(Server& server, Client& client, const Message& 
 
     for (size_t i = 0; i < members.size(); ++i)
 		sendMessage(*members[i], reply);
+}
+
+
+void CommandHandler::handleKick(Server& server, Client& client, const Message& message)
+{
+    if (!client.isRegistered())
+        return (sendNumeric(client, IRC::ERR_NOTREGISTERED, "KICK :You have not registered"));
+
+    if (message.params.size() < 2)
+        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS, "KICK :Not enough parameters"));
+
+    std::vector<std::string>	channels = split(message.params[0], ',');
+    std::vector<std::string>	users = split(message.params[1], ',');
+
+    if (channels.empty() || users.empty())
+        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS, "KICK :Not enough parameters"));
+
+    if (channels.size() != 1 && channels.size() != users.size())
+        return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS, "KICK :Invalid number of channels and users"));
+
+    std::string reason = client.getNick();
+
+    if (message.params.size() > 2 && !message.params[2].empty())
+        reason = message.params[2];
+
+    for (size_t i = 0; i < users.size(); ++i)
+    {
+        size_t		channelIndex = (channels.size() == 1) ? 0 : i;
+        Channel*	channel = server.findChannel(channels[channelIndex]);
+
+        if (!channel)
+        {
+            sendNumeric(client, IRC::ERR_NOSUCHCHANNEL, channels[channelIndex] + " :No such channel");
+            continue;
+        }
+
+        if (!channel->hasMember(client))
+        {
+            sendNumeric(client, IRC::ERR_NOTONCHANNEL, channels[channelIndex] + " :You're not on that channel");
+            continue;
+        }
+
+        if (!channel->hasOperator(client))
+        {
+            sendNumeric(client, IRC::ERR_CHANOPRIVSNEEDED, channels[channelIndex] + " :You're not a channel operator");
+            continue;
+        }
+
+        Client* target = server.findClient(users[i]);
+
+        if (!target)
+        {
+            sendNumeric(client, IRC::ERR_NOSUCHNICK, users[i] + " :No such nick");
+            continue;
+        }
+
+        if (!channel->hasMember(*target))
+        {
+            sendNumeric(client, IRC::ERR_USERNOTINCHANNEL, users[i] + " " + channels[channelIndex] + " :They aren't on that channel");
+            continue;
+        }
+
+        std::string	prefix = ":" + client.getNick() + "!" + client.getUsername() + "@localhost";
+        std::string	reply = prefix + " KICK " + channel->getTitle() + " " + target->getNick() + " :" + reason + "\r\n";
+
+        const std::vector<Client*>&	members = channel->getMembers();
+
+        for (size_t j = 0; j < members.size(); ++j)
+            sendMessage(*members[j], reply);
+
+        channel->removeMember(*target);
+        target->removeChannel(*channel);
+    }
+}
+
+void CommandHandler::handleInvite(Server& server, Client& client, const Message& message)
+{
+	if (!client.isRegistered())
+        return (sendNumeric(client, IRC::ERR_NOTREGISTERED, "INVITE :You have not registered"));
+
+	if (message.params.size() < 2)
+		return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS, "INVITE :Not enough parameters"));
+
+	Client* target = server.findClient(message.params[0]);
+	if (!target)
+		return (sendNumeric(client, IRC::ERR_NOSUCHNICK, message.params[0] + " :No such nick"));
+
+	Channel* channel = server.findChannel(message.params[1]);
+	if (!channel)
+		return (sendNumeric(client, IRC::ERR_NOSUCHCHANNEL, message.params[1] + " :No such channel"));
+
+	if (!channel->hasMember(client))
+		return (sendNumeric(client, IRC::ERR_NOTONCHANNEL, message.params[1] + " :You're not on that channel"));
+
+	if (channel->isInviteOnly() && !channel->hasOperator(client))
+		return (sendNumeric(client, IRC::ERR_CHANOPRIVSNEEDED, message.params[1] + " :You're not a channel operator"));
+	
+	if (channel->hasMember(*target))
+		return (sendNumeric(client, IRC::ERR_USERONCHANNEL, target->getNick() + " " + message.params[1] + " :is already on channel"));
+	
+	channel->addInvited(*target);
+	sendNumeric(client, IRC::RPL_INVITING, message.params[1] + " " + message.params[0]);
+
+	std::string	prefix = ":" + client.getNick() + "!" + client.getUsername() + "@localhost";
+    std::string reply = prefix + " INVITE " + target->getNick() + " " + channel->getTitle() + "\r\n";
+	sendMessage(*target, reply);
 }

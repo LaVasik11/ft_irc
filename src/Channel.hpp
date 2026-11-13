@@ -15,6 +15,7 @@ public:
     void        				removeMember(Client& client);
     void        				addOperator(Client& client);
     void        				setPassword(std::string password);
+	void						addInvited(Client& client);
 
     std::string 				getTitle() const;
     std::string 				getTopic() const;
@@ -28,6 +29,7 @@ public:
     bool        				hasUserLimit() const;
     bool        				hasMember(const Client& client) const;
 	bool        				hasOperator(const Client& client) const;
+	bool						hasInvited(const Client& client) const;
 
     size_t      				getUserLimit() const;
     size_t      				getMembersCount() const;
@@ -51,6 +53,7 @@ private:
     bool                    _topicRestricted;
     std::vector<Client*>    _members;
     std::vector<Client*>    _operators;
+	std::vector<Client*>	_invitedClients;
 };
 
 #endif
