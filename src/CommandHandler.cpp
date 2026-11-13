@@ -20,8 +20,6 @@ void CommandHandler::handle(Server& server, Client& client, const Message& messa
         handlePrivmsg(server, client, message);
     else if (message.command == "QUIT")
         handleQuit(server, client, message);
-    else if (message.command == "PING")
-        handlePing(server, client, message);
 	else if (message.command == "MODE")
 		handleMode(server, client, message);
 	else if (message.command == "TOPIC")
@@ -340,7 +338,7 @@ void CommandHandler::joinChannel(Server& server, Client& client, const std::stri
         sendMessage(*members[i], joinMessage);
 
     if (!channel->getTopic().empty())
-        sendNumeric(client, IRC::RPL_LIST, title + " :" + channel->getTopic());
+        sendNumeric(client, IRC::RPL_TOPIC, title + " :" + channel->getTopic());
     else
         sendNumeric(client, IRC::RPL_NOTOPIC, title + " :No topic is set");
 
@@ -361,7 +359,7 @@ void CommandHandler::joinChannel(Server& server, Client& client, const std::stri
     sendNumeric(client, IRC::RPL_ENDOFNAMES, title + " :End of /NAMES list");
 }
 
-void CommandHandler::handleJoinZero(Server& server, Client& client)
+void CommandHandler::handleJoinZero(Server& server, Client& client, std::string msg)
 {
     std::vector<Channel*> channels = client.getChannels();
 
@@ -370,7 +368,7 @@ void CommandHandler::handleJoinZero(Server& server, Client& client)
         Channel* channel = channels[i];
 
         std::string message = ":" + client.getNick() + "!" + client.getUsername() \
-		+ "@localhost" + " PART " + channel->getTitle() + " :Leaving all channels\r\n";
+		+ "@localhost" + " PART " + channel->getTitle() + " :" + msg + "\r\n";
 
         const std::vector<Client*>& members = channel->getMembers();
 
@@ -474,7 +472,7 @@ void CommandHandler::handleJoin(Server& server, Client& client, const Message& m
         return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS, "JOIN :Not enough parameters"));
 
     if (message.params[0] == "0")
-        return handleJoinZero(server, client);
+        return handleJoinZero(server, client, "Leaving all channels");
 
     std::vector<std::string> channels = split(message.params[0], ',');
     std::vector<std::string> passwords;
@@ -550,16 +548,38 @@ void CommandHandler::handlePrivmsg(Server& server, Client& client, const Message
 
 void CommandHandler::handleQuit(Server& server, Client& client, const Message& message)
 {
-	(void)server;
-	(void)client;
-	(void)message;
-}
+    std::string	prefix = ":" + client.getNick() + "!" + client.getUsername() + "@localhost";
+    std::string	reply = prefix + " QUIT";
 
-void CommandHandler::handlePing(Server& server, Client& client, const Message& message)
-{
-	(void)server;
-	(void)client;
-	(void)message;
+    if (!message.params.empty())
+        reply += " :" + message.params[0];
+    else
+        reply += " :Client Quit";
+
+    reply += "\r\n";
+
+    std::vector<Channel*>	channels = client.getChannels();
+    std::set<Client*>		users;
+
+    for (size_t i = 0; i < channels.size(); ++i)
+    {
+        const std::vector<Client*>& members = channels[i]->getMembers();
+
+        for (size_t j = 0; j < members.size(); ++j)
+        {
+            if (members[j] != &client)
+                users.insert(members[j]);
+        }
+
+		channels[i]->removeMember(client);
+		if (channels[i]->getMembersCount() == 0)
+			server.removeChannel(channels[i]);
+    }
+
+    for (std::set<Client*>::iterator it = users.begin(); it != users.end(); ++it)
+        sendMessage(*(*it), reply);
+
+    client.disconnect();
 }
 
 void CommandHandler::handleMode(Server& server, Client& client, const Message& message)

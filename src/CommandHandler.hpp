@@ -4,6 +4,7 @@
 #include "Message.hpp"
 #include "Client.hpp"
 #include <vector>
+#include <set>
 #include <string>
 #include <sstream>
 #include <cctype>
@@ -50,7 +51,6 @@ private:
     void						handleJoin(Server& server, Client& client, const Message& message);
     void						handlePrivmsg(Server& server, Client& client, const Message& message);
     void						handleQuit(Server& server, Client& client, const Message& message);
-    void						handlePing(Server& server, Client& client, const Message& message);
 	void						handleMode(Server& server, Client& client, const Message& message);
 	void						handleTopic(Server& server, Client& client, const Message& message);
 	void						handleKick(Server& server, Client& client, const Message& message);
@@ -59,7 +59,7 @@ private:
 	void						tryRegister(Client& client);
 	std::vector<std::string>	split(const std::string& str, char delimiter);
 	void						joinChannel(Server& server, Client& client, const std::string& title, const std::string& key);
-	void						handleJoinZero(Server& server, Client& client);
+	void						handleJoinZero(Server& server, Client& client, std::string msg);
 	ModeParseResult				parseModes(const Message& message, std::vector<ModeChange>& changes, char& invalidMode);
 	ModeValidationResult		validateModes(const Channel& channel, const std::vector<ModeChange>& changes, Server& server, std::string& errorArgument);
 	void						applyModes(Channel& channel, const std::vector<ModeChange>& changes, Server& server);
