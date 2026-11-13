@@ -548,8 +548,10 @@ void CommandHandler::handlePrivmsg(Server& server, Client& client, const Message
 
 void CommandHandler::handleQuit(Server& server, Client& client, const Message& message)
 {
-    std::string	prefix = ":" + client.getNick() + "!" + client.getUsername() + "@localhost";
-    std::string	reply = prefix + " QUIT";
+    (void)server;
+
+    std::string prefix = ":" + client.getNick() + "!" + client.getUsername() + "@localhost";
+    std::string reply = prefix + " QUIT";
 
     if (!message.params.empty())
         reply += " :" + message.params[0];
@@ -558,8 +560,8 @@ void CommandHandler::handleQuit(Server& server, Client& client, const Message& m
 
     reply += "\r\n";
 
-    std::vector<Channel*>	channels = client.getChannels();
-    std::set<Client*>		users;
+    std::vector<Channel*> channels = client.getChannels();
+    std::set<Client*> users;
 
     for (size_t i = 0; i < channels.size(); ++i)
     {
@@ -570,10 +572,6 @@ void CommandHandler::handleQuit(Server& server, Client& client, const Message& m
             if (members[j] != &client)
                 users.insert(members[j]);
         }
-
-		channels[i]->removeMember(client);
-		if (channels[i]->getMembersCount() == 0)
-			server.removeChannel(channels[i]);
     }
 
     for (std::set<Client*>::iterator it = users.begin(); it != users.end(); ++it)
