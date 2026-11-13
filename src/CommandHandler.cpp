@@ -300,7 +300,7 @@ ModeParseResult CommandHandler::parseModes(const Message& message, std::vector<M
 
 void CommandHandler::joinChannel(Server& server, Client& client, const std::string& title, const std::string& password)
 {
-    if (title.empty() || title.size() > 50 || (title[0] != '#' && title[0] != '&'))
+    if (title.empty() || title.size() > 50 || title[0] != '#')
         return (sendNumeric(client, IRC::ERR_BADCHANMASK, title + " :Bad Channel Mask"));
 
     for (size_t i = 0; i < title.size(); ++i)
@@ -496,12 +496,56 @@ void CommandHandler::handleJoin(Server& server, Client& client, const Message& m
 
 void CommandHandler::handlePrivmsg(Server& server, Client& client, const Message& message)
 {
-	if (!client.isRegistered())
-		return (sendNumeric(client, IRC::ERR_NOTREGISTERED, "PRIVMSG :You have not registered"));
+    if (!client.isRegistered())
+        return (sendNumeric(client, IRC::ERR_NOTREGISTERED, ":You have not registered"));
 
-	(void)server;
-	(void)client;
-	(void)message;
+    if (message.params.empty() || message.params[0].empty())
+        return (sendNumeric(client, IRC::ERR_NORECIPIENT, ":No recipient given (PRIVMSG)"));
+
+    if (message.params.size() < 2 || message.params[1].empty())
+        return (sendNumeric(client, IRC::ERR_NOTEXTTOSEND, ":No text to send"));
+
+    std::vector<std::string>	recipients = split(message.params[0], ',');
+    std::string					prefix = ":" + client.getNick() + "!" + client.getUsername() + "@localhost";
+
+    for (size_t i = 0; i < recipients.size(); ++i)
+    {
+        if (recipients[i].empty())
+            continue;
+
+        if (recipients[i][0] == '#')
+        {
+            Channel* channel = server.findChannel(recipients[i]);
+
+            if (!channel)
+            {
+                sendNumeric(client, IRC::ERR_NOSUCHCHANNEL, recipients[i] + " :No such channel");
+                continue;
+            }
+
+            std::string					reply = prefix + " PRIVMSG " + channel->getTitle() + " :" + message.params[1] + "\r\n";
+            const std::vector<Client*>&	members = channel->getMembers();
+
+            for (size_t j = 0; j < members.size(); ++j)
+            {
+                if (members[j] != &client)
+                    sendMessage(*members[j], reply);
+            }
+        }
+        else
+        {
+            Client* target = server.findClient(recipients[i]);
+
+            if (!target)
+            {
+                sendNumeric(client, IRC::ERR_NOSUCHNICK, recipients[i] + " :No such nick/channel");
+                continue;
+            }
+
+            std::string reply = prefix + " PRIVMSG " + target->getNick() + " :" + message.params[1] + "\r\n";
+            sendMessage(*target, reply);
+        }
+    }
 }
 
 void CommandHandler::handleQuit(Server& server, Client& client, const Message& message)
@@ -527,7 +571,6 @@ void CommandHandler::handleMode(Server& server, Client& client, const Message& m
         return (sendNumeric(client, IRC::ERR_NEEDMOREPARAMS, "MODE :Not enough parameters"));
 
     Channel* channel = server.findChannel(message.params[0]);
-
     if (!channel)
         return (sendNumeric(client, IRC::ERR_NOSUCHCHANNEL, message.params[0] + " :No such channel"));
 
@@ -556,9 +599,8 @@ void CommandHandler::handleMode(Server& server, Client& client, const Message& m
     if (parseResult != MODE_PARSE_SUCCESS)
         return;
 
-    std::string errorArgument;
-
-    ModeValidationResult validationResult = validateModes(*channel, changes, server, errorArgument);
+    std::string				errorArgument;
+    ModeValidationResult	validationResult = validateModes(*channel, changes, server, errorArgument);
 
     if (validationResult == MODE_VALIDATION_KEYSET)
         return (sendNumeric(client, IRC::ERR_KEYSET, channel->getTitle() + " :Channel key already set"));
